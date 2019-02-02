@@ -1,6 +1,6 @@
 {
   "name": "dyn-immutable",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Typescript compatible easy to use immutable modification library using expression ASTs to properly maintain immutability",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
