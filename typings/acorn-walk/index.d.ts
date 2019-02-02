@@ -1,8 +1,14 @@
 declare module 'acorn-walk' {
-    import { Node } from 'acorn';
+    interface Node {
+        type: string;
+        start?: number;
+        end?: number;
+        sourceFile?: string;
+        range?: [number, number];
+    }
 
     export type VisitorFunction<S = any> = (node: any, state: S) => void;
-    
+
     export function simple<S = any>(ast: Node, visitors: Record<string, VisitorFunction<S>>, baseVisitor?: any, state?: S): void;
 
     export function ancestor(ast: Node, visitors: Record<string, VisitorFunction<Node[]>>, baseVisitor?: any): void;

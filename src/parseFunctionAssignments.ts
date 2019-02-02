@@ -1,51 +1,36 @@
-import * as acorn from 'acorn';
-import { Node } from 'acorn';
+import { parse, ESTree } from 'cherow';
 import * as acornWalk from 'acorn-walk';
+import {
+    VariableDeclaration,
+    CallExpression,
+    MemberExpression,
+    Identifier,
+    FunctionExpression,
+    Literal,
+    Node,
+} from 'cherow/dist/types/estree';
 
-interface NodeAssignmentExpression<TLeft extends Node = Node> extends Node {
-    left: TLeft;
-    operator: '=' | '+=' | '-=' | '/=' | '*=';
+function isCallExpression(node: Node): node is CallExpression { return node.type === 'CallExpression'; }
+function isFunctionExpression(node: Node): node is FunctionExpression { return node.type === 'FunctionExpression'; }
+function isIdentifier(node: Node): node is Identifier { return node.type === 'Identifier'; }
+function isLiteral(node: Node): node is Literal { return node.type === 'Literal'; }
+function isMemberExpression(node: Node): node is MemberExpression { return node.type === 'MemberExpression'; }
+
+function getNodeSource(node: Node) {
+    return node.loc!.source!.substring(node.start!, node.end);
 }
 
-interface NodeCallExpression extends Node {
-    arguments: Node[];
-    callee: NodeMemberExpression;
-}
-
-interface NodeMemberExpression<TObj = Node, TProp = Node> extends Node {
-    object: TObj;
-    property: TProp;
-    computed: boolean;
-}
-
-interface NodeIdentifier extends Node {
-    name: string;
-}
-
-interface NodeFunctionExpression extends Node {
-    body: Node[];
-    params: NodeIdentifier[];
-}
-
-interface NodeLiteral extends Node {
-    raw: string;
-    value: string;
-}
-
-function isNodeIdentifier(node: Node): node is NodeIdentifier {
-    return node.type === 'Identifier';
-}
-
-function isNodeMemberExpression(node: Node): node is NodeMemberExpression {
-    return node.type === 'MemberExpression';
-}
-
-function isNodeCallExpression(node: Node): node is NodeCallExpression {
-    return node.type === 'CallExpression';
-}
-
-function isNodeLiteral(node: Node): node is NodeLiteral {
-    return node.type === 'Literal';
+function getFirstIdentifier(node: Node) {
+    while (node) {
+        if (isMemberExpression(node))
+            node = node.object;
+        else if (isCallExpression(node))
+            node = node.callee;
+        else
+            break;
+    }
+    if (isIdentifier(node))
+        return node;
 }
 
 const cachedFunctionAssignments = new Map<string, string[][]>();
@@ -58,50 +43,58 @@ const cachedFunctionAssignments = new Map<string, string[][]>();
  * @param  argsName    [description]
  * @return             [description]
  */
-function parseExpression(inNode: Node, parts: string[], parsedFnStr: string, argsName?: string) {
+function parseExpression(inNode: Node, parts: string[], argsName?: string) {
     acornWalk.recursive(inNode, null, {
-        MemberExpression: (node: NodeMemberExpression, _state, c) => {
+        MemberExpression: (node: MemberExpression, _state, c) => {
             c(node.object, _state);
             if (node.computed) {
                 if (
-                    !isNodeMemberExpression(node.property) ||
-                    !isNodeIdentifier(node.property.object) ||
-                    node.property.object.name !== argsName ||
-                    !isNodeIdentifier(node.property.property)
+                    isMemberExpression(node.property) &&
+                    isIdentifier(node.property.object) &&
+                    node.property.object.name === argsName &&
+                    isIdentifier(node.property.property)
                 ) {
-                    throw new Error('Illegal statement assignment expression at ' + parsedFnStr.substring(node.property.start, node.property.end));
+                    parts.push('%' + node.property.property.name);
+                } else if (
+                    isIdentifier(node.property) &&
+                    node.property.name === argsName
+                ) {
+                    parts.push('%');
+                } else {
+                    throw new Error('Illegal statement assignment expression: ' + getNodeSource(node.property));
                 }
-                parts.push('%' + node.property.property.name);
-            } else if (isNodeIdentifier(node.property)) {
+            } else if (isIdentifier(node.property)) {
                 parts.push(node.property.name);
             }
         },
-        CallExpression: (callNode: NodeCallExpression, _state, c) => {
-            if (!isNodeIdentifier(callNode.callee.property))
-                throw new Error('Invalid function call at ' + parsedFnStr.substring(callNode.callee.start, callNode.callee.end));
+        CallExpression: (callNode: CallExpression, _state, c) => {
+            if (!isMemberExpression(callNode.callee))
+                throw new Error('Invalid function call: ' + getNodeSource(callNode.callee));
+            if (!isIdentifier(callNode.callee.property))
+                throw new Error('Invalid function call: ' + getNodeSource(callNode.callee));
 
             // Check if this is a call to .get(...)
             if (callNode.callee.property.name !== 'get' || callNode.arguments.length !== 1)
-                throw new Error('Only Map get/set calls supported at ' + parsedFnStr.substring(callNode.callee.start, callNode.callee.end));
+                throw new Error('Only Map get/set calls supported: ' + getNodeSource(callNode.callee));
 
             // Walk over callee-base
             c(callNode.callee.object, _state);
 
             // Append map getter key
             const keyArg = callNode.arguments[0];
-            if (isNodeLiteral(keyArg)) {
-                parts.push(keyArg.value);
-            } else if (isNodeMemberExpression(keyArg)) {
+            if (isLiteral(keyArg)) {
+                parts.push(String(keyArg.value));
+            } else if (isMemberExpression(keyArg)) {
                 if (
-                    !isNodeIdentifier(keyArg.object) ||
+                    !isIdentifier(keyArg.object) ||
                     keyArg.object.name !== argsName ||
-                    !isNodeIdentifier(keyArg.property)
+                    !isIdentifier(keyArg.property)
                 ) {
-                    throw new Error('Illegal statement assignment expression at ' + parsedFnStr.substring(keyArg.start, keyArg.end));
+                    throw new Error('Illegal statement assignment expression: ' + getNodeSource(keyArg));
                 }
                 parts.push('%' + keyArg.property.name);
             } else {
-                throw new Error('Unsupported key argument ' + parsedFnStr.substring(callNode.arguments[0].start, callNode.arguments[0].end));
+                throw new Error('Unsupported key argument ' + getNodeSource(callNode.arguments[0]));
             }
         },
     });
@@ -110,41 +103,44 @@ function parseExpression(inNode: Node, parts: string[], parsedFnStr: string, arg
 export default function parseFunctionAssignments(fnStr: string) {
     if (cachedFunctionAssignments.has(fnStr))
         return cachedFunctionAssignments.get(fnStr)!.slice();
+
     const parsedFnStr = 'const $$$expr = ' + fnStr;
-    const assignments: string[][] = [];
-    const ast = acorn.parse(parsedFnStr) as any;
-    const fnAst = ast.body[0].declarations[0].init as NodeFunctionExpression;
-    if (fnAst.params.length > 2)
-        throw new Error('too many arguments');
+    const ast = parse(parsedFnStr, { ranges: true, loc: true, source: parsedFnStr });
+
+    const fnAst = (ast.body[0] as VariableDeclaration).declarations[0].init;
+    if (!fnAst || !isFunctionExpression(fnAst))
+        throw new Error('passed string is not a function expresion');
     if (fnAst.params.length < 1)
         throw new Error('state argument is required');
-    const stateName = fnAst.params[0].name;
-    const argsName = fnAst.params[1] ? fnAst.params[1].name : undefined;
+    if (fnAst.params.length > 2)
+        throw new Error('too many arguments');
+    const [stateParam, argsParam] = fnAst.params;
 
+    if (!isIdentifier(stateParam))
+        throw new Error('Unexpected error: ' + getNodeSource(stateParam));
+    const stateName = stateParam.name;
+
+    if (argsParam && !isIdentifier(argsParam))
+        throw new Error('Unexpected error: ' + getNodeSource(argsParam));
+    const argsName = argsParam ? argsParam.name : undefined;
+
+    const assignments: string[][] = [];
     acornWalk.ancestor(fnAst, {
-        AssignmentExpression: (assNode: NodeAssignmentExpression) => {
+        AssignmentExpression: (assNode: ESTree.AssignmentExpression) => {
             if (assNode.operator !== '=')
-                throw new Error('Unsupported assignment operation ' + assNode.operator);
+                throw new Error('Unsupported assignment operation: ' + assNode.operator);
 
             // Validate if this is amd-dep state assignment
-            let firstIdentifier = assNode.left;
-            while (firstIdentifier) {
-                if (isNodeMemberExpression(firstIdentifier))
-                    firstIdentifier = firstIdentifier.object;
-                else if (isNodeCallExpression(firstIdentifier))
-                    firstIdentifier = firstIdentifier.callee.object;
-                else
-                    break;
-            }
-            if (!isNodeIdentifier(firstIdentifier) || firstIdentifier.name !== stateName)
+            let firstIdentifier = getFirstIdentifier(assNode.left);
+            if (!firstIdentifier || firstIdentifier.name !== stateName)
                 return;
 
             // Walk expression tree and build path while replacing arguments
             const parts: string[] = [];
-            parseExpression(assNode.left, parts, parsedFnStr, argsName);
+            parseExpression(assNode.left, parts, argsName);
             assignments.push(parts);
         },
-        CallExpression: (callNode: NodeCallExpression, ancestors) => {
+        CallExpression: (callNode: CallExpression, ancestors) => {
             for (let i = ancestors.length - 1; i >= 0; i--) {
                 const t = ancestors[i].type;
                 if (t === 'AssignmentExpression')
@@ -153,38 +149,22 @@ export default function parseFunctionAssignments(fnStr: string) {
                     break;
             }
 
-            // Validate if this is amd-dep state assignment
-            let firstIdentifier = callNode.callee.object;
-            while (firstIdentifier && isNodeMemberExpression(firstIdentifier)) firstIdentifier = firstIdentifier.object;
-            if (!isNodeIdentifier(firstIdentifier) || firstIdentifier.name !== stateName)
-                return;
-            if (!isNodeIdentifier(callNode.callee.property))
+            if (!isMemberExpression(callNode.callee) || !isIdentifier(callNode.callee.property))
                 return;
 
-            // Check if this is a call to .set(...)
-            if (callNode.callee.property.name !== 'set' || callNode.arguments.length !== 2)
-                throw new Error('Only Map get/set calls supported at ' + parsedFnStr.substring(callNode.callee.start, callNode.callee.end));
+            // Validate if this is amd-dep state assignment
+            let firstIdentifier = getFirstIdentifier(callNode.callee);
+            if (!firstIdentifier || firstIdentifier.name !== stateName)
+                return;
+
+            const argCount = callNode.arguments.length;
+            const fnName = callNode.callee.property.name;
+            if (!(fnName === 'set' && argCount === 2) && !(fnName === 'delete' && argCount === 1))
+                throw new Error('Only calls to Map.set and Map.delete are supported: ' + getNodeSource(callNode.callee));
 
             // Walk expression tree and build path while replacing arguments
             const parts: string[] = [];
-            parseExpression(callNode.callee.object, parts, parsedFnStr, argsName);
-
-            // Append map setter key
-            const keyArg = callNode.arguments[0];
-            if (isNodeLiteral(keyArg)) {
-                parts.push(keyArg.value);
-            } else if (isNodeMemberExpression(keyArg)) {
-                if (
-                    !isNodeIdentifier(keyArg.object) ||
-                    keyArg.object.name !== argsName ||
-                    !isNodeIdentifier(keyArg.property)
-                ) {
-                    throw new Error('Illegal statement assignment expression at ' + parsedFnStr.substring(keyArg.start, keyArg.end));
-                }
-                parts.push('%' + keyArg.property.name);
-            } else {
-                throw new Error('Unsupported key argument ' + parsedFnStr.substring(callNode.arguments[0].start, callNode.arguments[0].end));
-            }
+            parseExpression(callNode.callee.object, parts, argsName);
 
             assignments.push(parts);
         },

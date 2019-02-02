@@ -7,7 +7,8 @@
   "scripts": {
     "build": "rm -Rf dist/* && cd src && tsc",
     "test": "mocha -r test/ts-node.es5 test/**/*.ts",
-    "test-esnext": "mocha -r test/ts-node.esnext test/**/*.ts"
+    "test-esnext": "mocha -r test/ts-node.esnext test/**/*.ts",
+    "test-debug": "node --inspect-brk node_modules/mocha/bin/_mocha -r test/ts-node.es5 test/**/*.ts"
   },
   "repository": {
     "type": "git",
@@ -25,12 +26,11 @@
   },
   "homepage": "https://github.com/olee/dyn-immutable#readme",
   "dependencies": {
-    "acorn": "^6.0.6",
     "acorn-walk": "^6.1.1",
+    "cherow": "^1.6.9",
     "deep-freeze-strict": "^1.1.1"
   },
   "devDependencies": {
-    "@types/acorn": "^4.0.4",
     "@types/chai": "^4.1.7",
     "@types/deep-freeze-strict": "^1.1.0",
     "@types/mocha": "^5.2.5",

@@ -2,13 +2,15 @@
 A Node.js library to immutably modify plain old JavaScript objects (POJO)
 
 ## Installation
-
 ```sh
 npm install dyn-immutable
 ```
 
 ## How it works
 This library exports a single function to immutably assign values to any variables inside a deeply nested object structure (like a redux store).
+
+This works by parsing the string conversion of the passed update function with an AST parser and extracting all assignments to the state variable argument.
+This information is then used to create a clone of the passed state but only where properties are know to change when executing the state update function.
 
 ## Usage
 
@@ -73,9 +75,27 @@ state = ia(state, (s, args) => s.record[args.key].text = value, { key: 'bar' });
 
 ### default (immutableAssign function)
 ```ts
-function immutableAssign<TObj>(obj: TObj, fn: (o: TObj) => void): TObj;
-function immutableAssign<TObj, TArgs extends Record<string, any>>(obj: TObj, fn: (o: TObj, args: TArgs) => void, args: TArgs): TObj;
+function immutableAssign<TObj>(obj: TObj, setter: (o: TObj) => void): TObj;
+function immutableAssign<TObj>(obj: TObj, setter: (o: TObj) => void, args: undefined, options?: DynImmutableOptions): TObj;
+function immutableAssign<TObj, TArgs>(obj: TObj, setter: (o: TObj, args: TArgs) => void, args: TArgs, options?: DynImmutableOptions): TObj;
 ```
 
-### setOptions(newOptions)
+### setOptions(newOptions: DynImmutableOptions)
 Sets options for this library. The newOptions object is merged with the current options.
+
+### DynImmutableOptions
+```ts
+interface DynImmutableOptions {
+    /**
+     * If enabled, will use the constructor of the present object to create the clone.
+     * Otherwise only clones as plain objects.
+     * Default: true
+     */
+    useConstructor?: boolean;
+    /**
+     * If enabled, deep-freezes new state after modification
+     * Default: true if NODE_ENV != 'production'
+     */
+    freeze?: boolean;
+}
+```
