@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../dist",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "esnext",
+    "lib": [
+        "es6"
+    ],
+    "sourceMap": false,
+    "declaration": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowSyntheticDefaultImports": false,
+    "typeRoots" : [
+        "../node_modules/@types",
+        "../typings"
+    ]
+  },
+  "compileOnSave": true
+}
