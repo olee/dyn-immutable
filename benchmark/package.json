@@ -1,0 +1,17 @@
+{
+  "name": "dyn-immutable-benchmark",
+  "version": "0.2.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Björn Zeutzheim <npm@bzeutzheim.de> (https://github.com/olee)",
+  "license": "ISC",
+  "dependencies": {
+    "@types/benchmark": "^1.0.31",
+    "benchmark": "^2.1.4",
+    "immutable-assign": "^2.1.1",
+    "microtime": "^2.1.9"
+  }
+}
