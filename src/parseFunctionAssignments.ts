@@ -1,17 +1,19 @@
 import { parse, ESTree } from 'cherow';
 import * as acornWalk from 'acorn-walk';
 import {
-    VariableDeclaration,
+    ArrowFunctionExpression,
     CallExpression,
-    MemberExpression,
-    Identifier,
+    ExpressionStatement,
     FunctionExpression,
+    Identifier,
     Literal,
+    MemberExpression,
     Node,
 } from 'cherow/dist/types/estree';
 
 function isCallExpression(node: Node): node is CallExpression { return node.type === 'CallExpression'; }
 function isFunctionExpression(node: Node): node is FunctionExpression { return node.type === 'FunctionExpression'; }
+function isArrowFunctionExpression(node: Node): node is ArrowFunctionExpression { return node.type === 'ArrowFunctionExpression'; }
 function isIdentifier(node: Node): node is Identifier { return node.type === 'Identifier'; }
 function isLiteral(node: Node): node is Literal { return node.type === 'Literal'; }
 function isMemberExpression(node: Node): node is MemberExpression { return node.type === 'MemberExpression'; }
@@ -104,12 +106,13 @@ export default function parseFunctionAssignments(fnStr: string) {
     if (cachedFunctionAssignments.has(fnStr))
         return cachedFunctionAssignments.get(fnStr)!.slice();
 
-    const parsedFnStr = 'const $$$expr = ' + fnStr;
+    const parsedFnStr = `(${fnStr})`;
     const ast = parse(parsedFnStr, { ranges: true, loc: true, source: parsedFnStr });
 
-    const fnAst = (ast.body[0] as VariableDeclaration).declarations[0].init;
-    if (!fnAst || !isFunctionExpression(fnAst))
+    const fnAst = (ast.body[0] as ExpressionStatement).expression;
+    if (!fnAst || (!isFunctionExpression(fnAst) && !isArrowFunctionExpression(fnAst)))
         throw new Error('passed string is not a function expresion');
+
     if (fnAst.params.length < 1)
         throw new Error('state argument is required');
     if (fnAst.params.length > 2)

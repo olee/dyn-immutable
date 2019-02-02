@@ -13,6 +13,7 @@
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "allowSyntheticDefaultImports": false,
+    "skipLibCheck": true,
     "typeRoots" : [
         "../node_modules/@types",
         "../typings"
